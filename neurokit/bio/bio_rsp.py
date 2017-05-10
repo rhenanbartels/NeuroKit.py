@@ -186,10 +186,7 @@ def rsp_find_cycles(signal):
     # Create a continuous inspiration signal
     # ---------------------------------------
     # Find initial phase
-    if phases_indices[0] == "Inspiration":
-        phase = "Expiration"
-    else:
-        phase = "Inspiration"
+    phase = _get_initial_phase(phases_indices)
 
     inspiration = []
     phase_counter = 0
@@ -201,10 +198,8 @@ def rsp_find_cycles(signal):
         inspiration.append(phase)
 
     # Find last phase
-    if phases_indices[len(phases_indices)-1] == "Inspiration":
-        last_phase = "Expiration"
-    else:
-        last_phase = "Inspiration"
+    last_phase = _get_final_phase(phases_indices)
+
     inspiration = np.array(inspiration)
     inspiration[max(zeros):] = last_phase
 
@@ -225,3 +220,7 @@ def rsp_find_cycles(signal):
 
 def _get_initial_phase(phases):
     return phases[1]
+
+
+def _get_final_phase(phases):
+    return phases[-2]
