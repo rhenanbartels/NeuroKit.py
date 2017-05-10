@@ -221,3 +221,7 @@ def rsp_find_cycles(signal):
                   "RSP_Cycles_Length": cycles_length}
 
     return(rsp_cycles)
+
+
+def _get_initial_phase(phases):
+    return phases[1]
