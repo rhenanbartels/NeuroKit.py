@@ -2,10 +2,11 @@
 """
 Subsubmodule for ecg processing.
 """
+import datetime
+
 import numpy as np
 import pandas as pd
 import biosppy
-import datetime
 import hrv
 
 from .bio_rsp import *
@@ -100,15 +101,12 @@ def ecg_process(ecg, rsp=None, sampling_rate=1000, resampling_method="bfill"):
 
 
     # Heart rate index creation
-    time_now = datetime.datetime.now()
-    # Convert seconds to datetime deltas
-    time_index = [datetime.timedelta(seconds=x) for x in biosppy_ecg["heart_rate_ts"]]
-    time_index = np.array(time_index) + time_now
-    heart_rate = pd.Series(biosppy_ecg["heart_rate"], index=time_index)
+    heart_rate = pd.Series(biosppy_ecg["heart_rate"],
+                           index=_create_time_index(
+                               biosppy_ecg["heart_rate_ts"]))
 
     # Create resampling factor
     resampling_rate = str(int(1000/sampling_rate)) + "L"
-
     # Resample
     if resampling_method == "mean":
         heart_rate = heart_rate.resample(resampling_rate).mean()
@@ -125,7 +123,7 @@ def ecg_process(ecg, rsp=None, sampling_rate=1000, resampling_method="bfill"):
 #        ecg_features["Heart_Rate"] = scipy.signal.resample(heart_rate, len(ecg))  # Looks more badly when resampling with scipy
 
     # RR intervals (RRis)
-    rri = np.diff(biosppy_ecg["rpeaks"])
+    rri = _create_rri(biosppy_ecg["rpeaks"], sampling_rate)
 
     # Store results
     processed_ecg = {"df": ecg_df,
@@ -138,18 +136,20 @@ def ecg_process(ecg, rsp=None, sampling_rate=1000, resampling_method="bfill"):
 
 
     # HRV
-    if sampling_rate == 1000:
 
-        # Calculate time domain indexes
-        hrv_time_domain = hrv.classical.time_domain(rri)
-        hrv_features = {"HRV_MHR": hrv_time_domain['mhr'],
-                        "HRV_MRRI": hrv_time_domain['mrri'],
-                        "HRV_NN50": hrv_time_domain['nn50'],
-                        "HRV_PNN50": hrv_time_domain['pnn50'],
-                        "HRV_RMSSD": hrv_time_domain['rmssd'],
-                        "HRV_RMSSD_Log": np.log(hrv_time_domain['rmssd']),
-                        "HRV_SDNN": hrv_time_domain['sdnn']
-                }
+    # Calculate time domain indexes
+    hrv_time_domain = hrv.classical.time_domain(rri)
+    hrv_non_linear = hrv.classical.non_linear(rri)
+    hrv_features = {"HRV_MHR": hrv_time_domain['mhr'],
+                    "HRV_MRRI": hrv_time_domain['mrri'],
+                    "HRV_NN50": hrv_time_domain['nn50'],
+                    "HRV_PNN50": hrv_time_domain['pnn50'],
+                    "HRV_RMSSD": hrv_time_domain['rmssd'],
+                    "HRV_RMSSD_Log": np.log(hrv_time_domain['rmssd']),
+                    "HRV_SDNN": hrv_time_domain['sdnn'],
+                    "HRV_SD1": hrv_non_linear['sd1'],
+                    "HRV_SD2": hrv_non_linear['sd2']
+            }
         # Calculate frequency domain indexes
 # NOT WORKING FOR NOW
 #        try:
@@ -164,9 +164,7 @@ def ecg_process(ecg, rsp=None, sampling_rate=1000, resampling_method="bfill"):
 #        except:
 #            print("NeuroKit Error: ecg_process(): Signal to short to compute frequency domains HRV. Must me longer than 3.4 minutes.")
 
-        processed_ecg["ECG"]["HRV"] = hrv_features
-    else:
-        print("NeuroKit Warning: ecg_process(): No HRV computation supported for sampling rates different from 1000Hz for now.")
+    processed_ecg["ECG"]["HRV"] = hrv_features
 
 
 
@@ -362,3 +360,14 @@ def ecg_plot_cardiac_cycles(signal, sampling_rate=1000):
     """
     """
     # To do
+    #
+
+
+def _create_rri(r_peaks, sampling_rate):
+    return np.diff(r_peaks) / sampling_rate * 1000
+
+
+def _create_time_index(ts):
+    now = datetime.datetime.now()
+    time_index = [now + datetime.timedelta(seconds=s) for s in np.cumsum(ts)]
+    return time_index
